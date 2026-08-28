@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor Orbital 3D - Peña Blanca</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #8a9a77;
+            --dark: #1a1a1a;
+        }
+        body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #000; color: #fff; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
+        
+        .header { padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); position: absolute; top: 0; width: 100%; box-sizing: border-box; z-index: 10; }
+        .header h1 { margin: 0; font-size: 1.2rem; font-weight: 500; letter-spacing: 1px; }
+        .btn-back { color: #fff; text-decoration: none; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; border: 1px solid rgba(255,255,255,0.3); padding: 8px 15px; border-radius: 20px; transition: all 0.3s; }
+        .btn-back:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
+
+        .viewer-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; cursor: grab; }
+        .viewer-container:active { cursor: grabbing; }
+        canvas { max-width: 100%; max-height: 100vh; object-fit: contain; }
+
+        .controls { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 600px; background: rgba(26,26,26,0.6); backdrop-filter: blur(10px); padding: 15px 30px; border-radius: 40px; display: flex; align-items: center; gap: 20px; border: 1px solid rgba(255,255,255,0.1); z-index: 10; }
+        .controls i { color: #aaa; font-size: 1.2rem; }
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #fff; cursor: pointer; margin-top: -8px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: rgba(255,255,255,0.2); border-radius: 2px; }
+        
+        .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 20; }
+        .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        .help-text { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-size: 0.9rem; color: rgba(255,255,255,0.6); text-align: center; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Modelo Orbital 3D - Peña Blanca</h1>
+        <a href="../dossier-penablanca.html" class="btn-back"><i class="fa-solid fa-arrow-left"></i> Volver al Dossier</a>
+    </div>
+
+    <div class="loading" id="loader">
+        <div class="spinner"></div>
+        <span>Cargando modelo de alta resolución... (<span id="progress">0</span>%)</span>
+    </div>
+
+    <div class="viewer-container" id="viewer">
+        <div class="help-text">Arrastra la imagen o usa el control inferior para girar el modelo</div>
+        <canvas id="modelCanvas"></canvas>
+    </div>
+
+    <div class="controls">
+        <i class="fa-solid fa-rotate-left"></i>
+        <input type="range" min="1" max="100" value="1" id="frameSlider">
+        <i class="fa-solid fa-rotate-right"></i>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('modelCanvas');
+        const ctx = canvas.getContext('2d');
+        const slider = document.getElementById('frameSlider');
+        const loader = document.getElementById('loader');
+        const progressTxt = document.getElementById('progress');
+        const viewer = document.getElementById('viewer');
+
+        const totalFrames = 25;
+        const frames = [];
+        let loadedCount = 0;
+
+        for (let i = 1; i <= totalFrames; i++) {
+            const img = new Image();
+            img.src = 'visor_frames/frame_' + i.toString().padStart(3, '0') + '.jpg';
+            img.onload = () => {
+                loadedCount++;
+                progressTxt.innerText = Math.round((loadedCount / totalFrames) * 100);
+                if (loadedCount === 1) {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    renderFrame(1);
+                }
+                if (loadedCount === totalFrames) {
+                    loader.style.display = 'none';
+                }
+            };
+            img.onerror = () => {
+                loadedCount++;
+                if (loadedCount === totalFrames) loader.style.display = 'none';
+            };
+            frames.push(img);
+        }
+
+        function renderFrame(index) {
+            const img = frames[index - 1];
+            if (img && img.complete && img.naturalWidth !== 0) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        slider.addEventListener('input', (e) => {
+            renderFrame(parseInt(e.target.value));
+        });
+
+        let isDragging = false;
+        let startX = 0;
+        let currentFrame = 1;
+
+        viewer.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX;
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; });
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - startX;
+            if (Math.abs(deltaX) > 8) {
+                if (deltaX > 0) currentFrame = Math.min(totalFrames, currentFrame + 1);
+                else currentFrame = Math.max(1, currentFrame - 1);
+                slider.value = currentFrame;
+                renderFrame(currentFrame);
+                startX = e.clientX;
+            }
+        });
+        
+        viewer.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            startX = e.touches[0].clientX;
+        });
+        window.addEventListener('touchend', () => { isDragging = false; });
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const deltaX = e.touches[0].clientX - startX;
+            if (Math.abs(deltaX) > 8) {
+                if (deltaX > 0) currentFrame = Math.min(totalFrames, currentFrame + 1);
+                else currentFrame = Math.max(1, currentFrame - 1);
+                slider.value = currentFrame;
+                renderFrame(currentFrame);
+                startX = e.touches[0].clientX;
+            }
+        });
+    </script>
+</body>
+</html>
